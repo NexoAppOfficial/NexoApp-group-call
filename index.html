@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>NexoApp Group Call</title>
 
   <style>
@@ -14,39 +14,43 @@
       background: #f4f6fb;
       color: #172033;
     }
-    button, input, select { font: inherit; }
-    button {
-      border: 0;
-      border-radius: 9px;
-      padding: 13px 16px;
-      background: #164bdb;
-      color: white;
-      cursor: pointer;
-    }
-    button:disabled { opacity: .55; }
-    .danger { background: #c62828; }
-    .secondary { background: #475569; }
     .page {
-      max-width: 520px;
+      max-width: 650px;
       margin: auto;
-      padding: 20px;
+      padding: 18px;
     }
     .panel {
       background: white;
-      padding: 20px;
+      padding: 18px;
       border-radius: 15px;
       box-shadow: 0 3px 16px #0000000d;
       margin-bottom: 16px;
     }
-    h1 { color: #164bdb; font-size: 25px; }
-    h2 { font-size: 19px; }
-    label { display: block; margin: 12px 0 6px; }
-    input, select {
+    h1 { color: #164bdb; font-size: 24px; }
+    button {
+      border: 0;
+      border-radius: 9px;
+      padding: 13px 17px;
+      color: white;
+      background: #164bdb;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:disabled { opacity: .5; }
+    .danger { background: #c62828; }
+    .muted { color: #64748b; font-size: 13px; }
+    #message {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      margin: 12px 0;
+    }
+    #callContainer {
       width: 100%;
-      padding: 13px;
-      border: 1px solid #ccd3df;
-      border-radius: 8px;
-      background: white;
+      height: 72dvh;
+      min-height: 420px;
+      background: #111827;
+      border-radius: 12px;
+      overflow: hidden;
     }
     .actions {
       display: flex;
@@ -54,603 +58,180 @@
       gap: 10px;
       margin-top: 14px;
     }
-    .actions button { flex: 1; }
-    #message {
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-      font-size: 14px;
-      margin: 12px 0;
-    }
-    #callContainer {
-      width: 100%;
-      height: 75dvh;
-      min-height: 420px;
-      background: #111827;
-      border-radius: 12px;
-      overflow: hidden;
-    }
-    .muted { color: #64748b; font-size: 13px; }
     .hidden { display: none !important; }
-    .incoming {
-      border: 1px solid #b9c9f9;
-      border-radius: 10px;
-      padding: 14px;
-      margin-top: 12px;
-    }
   </style>
 </head>
 
 <body>
   <main class="page">
     <h1>NexoApp Group Call</h1>
-    <p class="muted">Voice and video calls</p>
-    <div id="message" role="status">Loading services...</div>
+    <p class="muted">Connect with your group by voice or video.</p>
 
-    <section id="loginPanel" class="panel">
-      <h2>Sign in to NexoApp Calls</h2>
-      <p class="muted">
-        Use your existing Supabase Auth email and password.
-        This webpage has its own login session.
-      </p>
+    <section class="panel">
+      <h2 id="groupTitle">Group Call</h2>
+      <p id="userInfo" class="muted"></p>
+      <p id="message" role="status">Preparing call...</p>
 
-      <form id="loginForm">
-        <label for="email">Email</label>
-        <input id="email" type="email" autocomplete="username" required>
-
-        <label for="password">Password</label>
-        <input id="password" type="password"
-               autocomplete="current-password" required>
-
-        <div class="actions">
-          <button type="submit">Sign in</button>
-        </div>
-      </form>
-    </section>
-
-    <section id="dashboard" class="panel hidden">
-      <h2>Make a call</h2>
-      <p id="signedInAs" class="muted"></p>
-
-      <label for="receiverID">Receiver's Supabase user UUID</label>
-      <input id="receiverID" placeholder="Paste receiver's user UUID">
-
-      <label for="callType">Call type</label>
-      <select id="callType">
-        <option value="voice">Voice call</option>
-        <option value="video">Video call</option>
-      </select>
-
-      <div class="actions">
-        <button id="callButton">Start call</button>
-        <button id="logoutButton" class="secondary">Sign out</button>
-      </div>
-
-      <h2>Incoming calls</h2>
-      <div id="incomingCalls">
-        <p class="muted">Waiting for incoming calls...</p>
+      <div class="actions" id="startActions">
+        <button id="voiceButton">Start Voice Call</button>
+        <button id="videoButton">Start Video Call</button>
       </div>
     </section>
 
-    <section id="activePanel" class="panel hidden">
+    <section class="panel hidden" id="activePanel">
       <h2 id="activeTitle">Call in progress</h2>
-      <p id="activeInfo" class="muted"></p>
       <div id="callContainer"></div>
       <div class="actions">
-        <button id="endButton" class="danger">End call</button>
+        <button id="endButton" class="danger">Leave Call</button>
       </div>
     </section>
   </main>
 
-  <!-- Supabase JavaScript client -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-  <!-- ZEGOCLOUD UIKit Prebuilt -->
   <script src="https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-uikit-prebuilt.js"></script>
 
   <script>
-    // SUPABASE CONFIGURATION
-    const SUPABASE_URL =
-      "https://usdkrqvgfqlxbrzgjrnb.supabase.co";
-
-    const SUPABASE_KEY =
-      "sb_publishable_UCX7yXRcFiDrcmfHAxFejA_6jTtcHwb";
-
-    // TEMPORARY ZEGOCLOUD TEST CONFIGURATION
+    // ZEGOCLOUD development configuration
     const appID = 233961104;
-    const serverSecret = "8475a53e8eded3d1daaac9fe7baa7222";
 
-    const db = window.supabase.createClient(
-      SUPABASE_URL,
-      SUPABASE_KEY
-    );
+    // DEVELOPMENT ONLY.
+    // Never publish a real server secret in public HTML.
+    const serverSecret = "REPLACE_WITH_TEST_SECRET";
+
+    const params = new URLSearchParams(window.location.search);
+
+    const groupId = params.get("groupId");
+    const userId = params.get("userId");
+    const userName = params.get("userName") || "NexoApp User";
+
+    // Every member of the same group must use the same room ID.
+    const roomId = groupId
+      ? "nexo_group_" + groupId.replace(/[^a-zA-Z0-9_]/g, "_")
+      : null;
 
     const $ = id => document.getElementById(id);
 
-    let currentUser = null;
-    let incomingChannel = null;
-    let callerChannel = null;
-    let activeCall = null;
     let zegoInstance = null;
-    let presenceChannel = null;
-    const seenCalls = new Set();
+    let callStarted = false;
 
-    function showMessage(message) {
-      $("message").textContent = message;
+    function showMessage(text) {
+      $("message").textContent = text;
     }
 
-    function showPanel(id, visible) {
-      $(id).classList.toggle("hidden", !visible);
+    function safeUserId(value) {
+      return value.replace(/[^a-zA-Z0-9_]/g, "_");
     }
 
-    function safeZegoID(value) {
-      return String(value).replace(/[^a-zA-Z0-9_]/g, "_");
-    }
-
-    function newID() {
-      return crypto.randomUUID();
-    }
-
-    function getCallURL(call) {
-      const url = new URL(window.location.href);
-      url.search = "";
-      url.searchParams.set("callId", call.id);
-      return url.toString();
-    }
-
-    async function updateCall(callID, values) {
-      const { error } = await db
-        .from("calls")
-        .update(values)
-        .eq("id", callID);
-
-      if (error) throw error;
-    }
-
-    function stopRealtime() {
-      if (incomingChannel) {
-        db.removeChannel(incomingChannel);
-        incomingChannel = null;
-      }
-
-      if (callerChannel) {
-        db.removeChannel(callerChannel);
-        callerChannel = null;
-      }
-
-      if (presenceChannel) {
-        db.removeChannel(presenceChannel);
-        presenceChannel = null;
-      }
-    }
-
-    async function setOnline(isOnline) {
-      if (!currentUser) return;
-
-      const now = new Date().toISOString();
-
-      const { error } = await db
-        .from("user_status")
-        .upsert({
-          user_id: currentUser.id,
-          is_online: isOnline,
-          last_seen: now
-        }, {
-          onConflict: "user_id"
-        });
-
-      if (error) {
-        console.warn("Could not update online status:", error.message);
-      }
-    }
-
-    function makeIncomingCard(call) {
-      if (seenCalls.has(call.id)) return;
-      seenCalls.add(call.id);
-
-      const container = $("incomingCalls");
-
-      if (container.querySelector(".muted")) {
-        container.innerHTML = "";
-      }
-
-      const card = document.createElement("div");
-      card.className = "incoming";
-
-      const title = document.createElement("strong");
-      title.textContent =
-        (call.call_type === "video" ? "Incoming video call" :
-        "Incoming voice call");
-
-      const details = document.createElement("p");
-      details.textContent = "Caller ID: " + call.caller_id;
-
-      const actions = document.createElement("div");
-      actions.className = "actions";
-
-      const answer = document.createElement("button");
-      answer.textContent = "Answer";
-
-      const reject = document.createElement("button");
-      reject.textContent = "Reject";
-      reject.className = "danger";
-
-      answer.onclick = async () => {
-        answer.disabled = true;
-        try {
-          const { data, error } = await db
-            .from("calls")
-            .update({
-              status: "answered",
-              answered_at: new Date().toISOString()
-            })
-            .eq("id", call.id)
-            .eq("receiver_id", currentUser.id)
-            .eq("status", "ringing")
-            .select()
-            .single();
-
-          if (error) throw error;
-          if (!data) throw new Error("Call is no longer available.");
-
-          card.remove();
-          await enterCall(data);
-        } catch (error) {
-          answer.disabled = false;
-          showMessage("Could not answer: " + error.message);
-        }
-      };
-
-      reject.onclick = async () => {
-        reject.disabled = true;
-        try {
-          await updateCall(call.id, {
-            status: "rejected",
-            ended_at: new Date().toISOString()
-          });
-          card.remove();
-          showMessage("Call rejected.");
-        } catch (error) {
-          reject.disabled = false;
-          showMessage("Could not reject: " + error.message);
-        }
-      };
-
-      actions.append(answer, reject);
-      card.append(title, details, actions);
-      container.prepend(card);
-    }
-
-    async function loadPendingCalls() {
-      const { data, error } = await db
-        .from("calls")
-        .select("*")
-        .eq("receiver_id", currentUser.id)
-        .eq("status", "ringing");
-
-      if (error) {
-        showMessage("Could not load incoming calls: " + error.message);
-        return;
-      }
-
-      (data || []).forEach(makeIncomingCard);
-    }
-
-    function subscribeToCalls() {
-      stopRealtime();
-
-      incomingChannel = db
-        .channel("incoming-calls-" + currentUser.id)
-        .on("postgres_changes", {
-          event: "INSERT",
-          schema: "public",
-          table: "calls",
-          filter: "receiver_id=eq." + currentUser.id
-        }, payload => {
-          if (payload.new.status === "ringing") {
-            makeIncomingCard(payload.new);
-            showMessage("Incoming call received.");
-          }
-        })
-        .subscribe(status => {
-          console.log("Incoming call listener:", status);
-        });
-
-      callerChannel = db
-        .channel("outgoing-call-updates-" + currentUser.id)
-        .on("postgres_changes", {
-          event: "UPDATE",
-          schema: "public",
-          table: "calls",
-          filter: "caller_id=eq." + currentUser.id
-        }, payload => {
-          const call = payload.new;
-
-          if (activeCall && activeCall.id === call.id) {
-            if (call.status === "answered") {
-              showMessage("Receiver answered the call.");
-            } else if (call.status === "rejected") {
-              showMessage("Receiver rejected the call.");
-            } else if (call.status === "ended") {
-              showMessage("Call ended.");
-            }
-          }
-        })
-        .subscribe(status => {
-          console.log("Call status listener:", status);
-        });
-    }
-
-    async function enterCall(call) {
+    function initializePage() {
       if (!window.ZegoUIKitPrebuilt) {
-        throw new Error("ZEGOCLOUD SDK has not loaded.");
+        showMessage("ZEGOCLOUD failed to load. Check your internet connection.");
+        $("startActions").classList.add("hidden");
+        return;
       }
 
-      if (zegoInstance) {
-        throw new Error("A call is already active.");
+      if (
+        !groupId ||
+        !userId ||
+        groupId.length > 200 ||
+        userId.length > 200
+      ) {
+        showMessage(
+          "Missing group or user information. Open this page from NexoApp."
+        );
+        $("startActions").classList.add("hidden");
+        return;
       }
 
-      activeCall = call;
-
-      showPanel("dashboard", false);
-      showPanel("activePanel", true);
-
-      $("activeTitle").textContent =
-        call.call_type === "video" ? "Video call" : "Voice call";
-
-      $("activeInfo").textContent = "Room: " + call.room_id;
-
-      const userID = safeZegoID(currentUser.id);
-      const userName =
-        currentUser.user_metadata?.full_name ||
-        currentUser.email ||
-        "NexoUser";
-
-      const token = ZegoUIKitPrebuilt.generateKitTokenForTest(
-        appID,
-        serverSecret,
-        call.room_id,
-        userID,
-        userName
-      );
-
-      zegoInstance = ZegoUIKitPrebuilt.create(token);
-
-      const sharedURL = getCallURL(call);
-
-      zegoInstance.joinRoom({
-        container: $("callContainer"),
-
-        sharedLinks: [{
-          name: "Join NexoApp Call",
-          url: sharedURL
-        }],
-
-        scenario: {
-          mode: ZegoUIKitPrebuilt.GroupCall
-        },
-
-        turnOnCameraWhenJoining: call.call_type === "video",
-        turnOnMicrophoneWhenJoining: true,
-
-        showMyCameraToggleButton: true,
-        showMyMicrophoneToggleButton: true,
-        showAudioVideoSettingsButton: true,
-        showScreenSharingButton: true,
-        showTextChat: true,
-        showUserList: true,
-        showPreJoinView: false
-      });
-
-      showMessage("Joined call room.");
+      $("groupTitle").textContent = "NexoApp Group";
+      $("userInfo").textContent = "Joining as: " + userName;
+      showMessage("Ready. Choose voice or video to begin.");
     }
 
-    async function startOutgoingCall() {
-      if (!currentUser) return;
+    async function startCall(media) {
+      if (callStarted || !groupId || !userId) return;
 
-      const receiverID = $("receiverID").value.trim();
-      const callType = $("callType").value;
-
-      if (!receiverID) {
-        showMessage("Enter the receiver's Supabase user UUID.");
-        return;
-      }
-
-      if (receiverID === currentUser.id) {
-        showMessage("You cannot call your own account.");
-        return;
-      }
-
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(receiverID)) {
-        showMessage("The receiver ID must be a valid Supabase UUID.");
-        return;
-      }
-
-      $("callButton").disabled = true;
+      $("voiceButton").disabled = true;
+      $("videoButton").disabled = true;
+      showMessage("Connecting to your group...");
 
       try {
-        const call = {
-          id: newID(),
-          caller_id: currentUser.id,
-          receiver_id: receiverID,
-          call_type: callType,
-          status: "ringing",
-          started_at: new Date().toISOString(),
-          answered_at: null,
-          ended_at: null,
-          created_at: new Date().toISOString(),
-          room_id: "nexo_" + newID().replace(/-/g, "")
-        };
+        const userID = safeUserId(userId);
 
-        const { data, error } = await db
-          .from("calls")
-          .insert(call)
-          .select()
-          .single();
+        const token = ZegoUIKitPrebuilt.generateKitTokenForTest(
+          appID,
+          serverSecret,
+          roomId,
+          userID,
+          userName
+        );
 
-        if (error) throw error;
+        zegoInstance = ZegoUIKitPrebuilt.create(token);
+        callStarted = true;
 
-        showMessage("Call created. Waiting for receiver...");
-        await enterCall(data);
+        $("activeTitle").textContent =
+          media === "video" ? "Group Video Call" : "Group Voice Call";
 
+        $("activePanel").classList.remove("hidden");
+        $("startActions").classList.add("hidden");
+
+        await zegoInstance.joinRoom({
+          container: $("callContainer"),
+
+          scenario: {
+            mode: ZegoUIKitPrebuilt.GroupCall
+          },
+
+          turnOnCameraWhenJoining: media === "video",
+          turnOnMicrophoneWhenJoining: true,
+
+          showMyCameraToggleButton: true,
+          showMyMicrophoneToggleButton: true,
+          showAudioVideoSettingsButton: true,
+          showScreenSharingButton: true,
+          showTextChat: true,
+          showUserList: true,
+          showPreJoinView: false
+        });
+
+        showMessage("Connected to group call.");
       } catch (error) {
         console.error(error);
-        showMessage(
-          "Could not start call: " + error.message +
-          "\nCheck your calls table columns and RLS policies."
-        );
-      } finally {
-        $("callButton").disabled = false;
-      }
-    }
+        showMessage("Could not start call: " + error.message);
 
-    async function endCall() {
-      if (!activeCall) return;
-
-      const call = activeCall;
-
-      try {
-        await updateCall(call.id, {
-          status: "ended",
-          ended_at: new Date().toISOString()
-        });
-      } catch (error) {
-        showMessage("Could not update call status: " + error.message);
-      }
-
-      try {
         if (zegoInstance && typeof zegoInstance.destroy === "function") {
           zegoInstance.destroy();
         }
-      } catch (error) {
-        console.warn("ZEGOCLOUD cleanup:", error);
+
+        zegoInstance = null;
+        callStarted = false;
+        $("activePanel").classList.add("hidden");
+        $("startActions").classList.remove("hidden");
+        $("voiceButton").disabled = false;
+        $("videoButton").disabled = false;
+      }
+    }
+
+    async function leaveCall() {
+      if (zegoInstance && typeof zegoInstance.destroy === "function") {
+        zegoInstance.destroy();
       }
 
       zegoInstance = null;
-      activeCall = null;
+      callStarted = false;
+
       $("callContainer").innerHTML = "";
+      $("activePanel").classList.add("hidden");
+      $("startActions").classList.remove("hidden");
+      $("voiceButton").disabled = false;
+      $("videoButton").disabled = false;
 
-      showPanel("activePanel", false);
-      showPanel("dashboard", true);
-      showMessage("Call ended.");
+      showMessage("You left the call.");
     }
 
-    async function openDashboard(user) {
-      currentUser = user;
+    $("voiceButton").addEventListener("click", () => startCall("voice"));
+    $("videoButton").addEventListener("click", () => startCall("video"));
+    $("endButton").addEventListener("click", leaveCall);
 
-      showPanel("loginPanel", false);
-      showPanel("dashboard", true);
-
-      $("signedInAs").textContent =
-        "Signed in: " + (user.email || user.id);
-
-      $("incomingCalls").innerHTML =
-        '<p class="muted">Checking incoming calls...</p>';
-
-      await setOnline(true);
-      subscribeToCalls();
-      await loadPendingCalls();
-
-      // If opened from an invitation, look up that call.
-      const inviteCallID =
-        new URLSearchParams(location.search).get("callId");
-
-      if (inviteCallID) {
-        const { data, error } = await db
-          .from("calls")
-          .select("*")
-          .eq("id", inviteCallID)
-          .eq("receiver_id", user.id)
-          .eq("status", "ringing")
-          .maybeSingle();
-
-        if (error) {
-          showMessage("Could not load invitation: " + error.message);
-        } else if (data) {
-          makeIncomingCard(data);
-        }
-      }
-
-      showMessage("Signed in. Ready for calls.");
-    }
-
-    $("loginForm").addEventListener("submit", async event => {
-      event.preventDefault();
-      showMessage("Signing in...");
-
-      const { data, error } = await db.auth.signInWithPassword({
-        email: $("email").value.trim(),
-        password: $("password").value
-      });
-
-      if (error) {
-        showMessage("Sign-in failed: " + error.message);
-        return;
-      }
-
-      await openDashboard(data.user);
-    });
-
-    $("callButton").addEventListener("click", startOutgoingCall);
-    $("endButton").addEventListener("click", endCall);
-
-    $("logoutButton").addEventListener("click", async () => {
-      if (activeCall) {
-        await endCall();
-      }
-
-      await setOnline(false);
-      stopRealtime();
-
-      const { error } = await db.auth.signOut();
-
-      if (error) {
-        showMessage("Sign-out failed: " + error.message);
-        return;
-      }
-
-      currentUser = null;
-      $("incomingCalls").innerHTML = "";
-      showPanel("dashboard", false);
-      showPanel("loginPanel", true);
-      showMessage("Signed out.");
-    });
-
-    async function initialize() {
-      if (!window.supabase || !window.ZegoUIKitPrebuilt) {
-        showMessage(
-          "A required service failed to load. Check your internet connection and reload."
-        );
-        return;
-      }
-
-      const { data, error } = await db.auth.getSession();
-
-      if (error) {
-        showMessage("Could not check session: " + error.message);
-        return;
-      }
-
-      if (data.session) {
-        await openDashboard(data.session.user);
-      } else {
-        showPanel("loginPanel", true);
-        showMessage("Sign in to make and receive calls.");
-      }
-    }
-
-    initialize();
-
-    // Mark offline when the page is being closed.
-    window.addEventListener("pagehide", () => {
-      if (currentUser) {
-        db.from("user_status")
-          .update({
-            is_online: false,
-            last_seen: new Date().toISOString()
-          })
-          .eq("user_id", currentUser.id);
-      }
-    });
+    initializePage();
   </script>
 </body>
 </html>
