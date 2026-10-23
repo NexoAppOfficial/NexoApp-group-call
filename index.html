@@ -39,10 +39,7 @@
       margin-bottom: 16px;
     }
 
-    h1 {
-      color: var(--primary);
-      font-size: 24px;
-    }
+    h1 { color: var(--primary); font-size: 24px; }
 
     button {
       border: 0;
@@ -56,13 +53,11 @@
 
     button:hover { background: var(--primary-dark); }
     button:disabled { opacity: .5; cursor: not-allowed; }
+
     .danger { background: var(--danger); }
     .danger:hover { background: #A61F1F; }
 
-    .muted {
-      color: var(--muted);
-      font-size: 13px;
-    }
+    .muted { color: var(--muted); font-size: 13px; }
 
     #message {
       white-space: pre-wrap;
@@ -116,24 +111,22 @@
     </section>
   </main>
 
-  <!-- ZEGOCLOUD UIKit -->
   <script src="https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-uikit-prebuilt.js"></script>
 
   <script>
-    // ZEGOCLOUD configuration
+    // Your ZEGOCLOUD App ID
     const appID = 233961104;
 
-    // Development testing only.
-    // Do not publish your production server secret here.
-    const serverSecret = "REPLACE_WITH_TEST_SECRET";
+    // TESTING ONLY: paste your existing test secret below.
+    // Do not publish a production secret in this file.
+    const serverSecret = "PASTE_YOUR_TEST_SECRET_HERE";
 
     const params = new URLSearchParams(window.location.search);
-
     const groupId = params.get("groupId");
     const userId = params.get("userId");
     const userName = params.get("userName") || "NexoApp User";
 
-    // All members of the same group must use the same room ID.
+    // Participants with the same groupId join the same room.
     const roomId = groupId
       ? "nexo_group_" + groupId.replace(/[^a-zA-Z0-9_]/g, "_")
       : null;
@@ -153,19 +146,12 @@
 
     function initializePage() {
       if (!window.ZegoUIKitPrebuilt) {
-        showMessage(
-          "ZEGOCLOUD failed to load. Check your internet connection."
-        );
+        showMessage("ZEGOCLOUD failed to load. Check your internet connection.");
         $("startActions").classList.add("hidden");
         return;
       }
 
-      if (
-        !groupId ||
-        !userId ||
-        groupId.length > 200 ||
-        userId.length > 200
-      ) {
+      if (!groupId || !userId) {
         showMessage(
           "Missing group or user information. Open this page from NexoApp."
         );
@@ -175,34 +161,30 @@
 
       $("groupTitle").textContent = "NexoApp Group";
       $("userInfo").textContent = "Joining as: " + userName;
-
       showMessage("Ready. Choose voice or video to begin.");
     }
 
     async function startCall(media) {
       if (callStarted || !groupId || !userId) return;
 
+      if (
+        !serverSecret ||
+        serverSecret === "PASTE_YOUR_TEST_SECRET_HERE"
+      ) {
+        showMessage("Add your temporary ZEGOCLOUD test secret first.");
+        return;
+      }
+
       $("voiceButton").disabled = true;
       $("videoButton").disabled = true;
       showMessage("Connecting to your group...");
 
       try {
-        if (
-          !serverSecret ||
-          serverSecret === "REPLACE_WITH_TEST_SECRET"
-        ) {
-          throw new Error(
-            "Add your temporary ZEGOCLOUD test secret to test calls."
-          );
-        }
-
-        const userID = safeUserId(userId);
-
         const token = ZegoUIKitPrebuilt.generateKitTokenForTest(
           appID,
           serverSecret,
           roomId,
-          userID,
+          safeUserId(userId),
           userName
         );
 
@@ -217,14 +199,9 @@
 
         await zegoInstance.joinRoom({
           container: $("callContainer"),
-
-          scenario: {
-            mode: ZegoUIKitPrebuilt.GroupCall
-          },
-
+          scenario: { mode: ZegoUIKitPrebuilt.GroupCall },
           turnOnCameraWhenJoining: media === "video",
           turnOnMicrophoneWhenJoining: true,
-
           showMyCameraToggleButton: true,
           showMyMicrophoneToggleButton: true,
           showAudioVideoSettingsButton: true,
@@ -237,6 +214,7 @@
         showMessage("Connected to group call.");
       } catch (error) {
         console.error(error);
+
         showMessage("Could not start call: " + error.message);
 
         if (zegoInstance && typeof zegoInstance.destroy === "function") {
@@ -245,7 +223,6 @@
 
         zegoInstance = null;
         callStarted = false;
-
         $("activePanel").classList.add("hidden");
         $("startActions").classList.remove("hidden");
         $("voiceButton").disabled = false;
@@ -264,23 +241,14 @@
       $("callContainer").innerHTML = "";
       $("activePanel").classList.add("hidden");
       $("startActions").classList.remove("hidden");
-
       $("voiceButton").disabled = false;
       $("videoButton").disabled = false;
 
       showMessage("You left the call.");
     }
 
-    $("voiceButton").addEventListener(
-      "click",
-      () => startCall("voice")
-    );
-
-    $("videoButton").addEventListener(
-      "click",
-      () => startCall("video")
-    );
-
+    $("voiceButton").addEventListener("click", () => startCall("voice"));
+    $("videoButton").addEventListener("click", () => startCall("video"));
     $("endButton").addEventListener("click", leaveCall);
 
     initializePage();
