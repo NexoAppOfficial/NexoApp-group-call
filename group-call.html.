@@ -1,289 +1,60 @@
-
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
-  >
-  <meta name="theme-color" content="#101B35">
-  <title>NexoApp Group Call</title>
-
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-
-    html,
-    body {
-      width: 100%;
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      background: #101B35;
-      font-family: Arial, sans-serif;
-    }
-
-    #root {
-      width: 100%;
-      height: 100%;
-      height: 100dvh;
-    }
-
-    #status {
-      position: fixed;
-      inset: 0;
-      z-index: 10;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      background: #FFFFFF;
-      color: #101B35;
-      text-align: center;
-    }
-
-    #status-card {
-      width: 100%;
-      max-width: 380px;
-    }
-
-    #status h1 {
-      font-size: 25px;
-      margin-bottom: 8px;
-    }
-
-    #status p {
-      font-size: 15px;
-      line-height: 1.6;
-      overflow-wrap: anywhere;
-    }
-
-    #retry {
-      padding: 13px 24px;
-      border: 0;
-      border-radius: 10px;
-      background: #101B35;
-      color: #FFFFFF;
-      font-size: 15px;
-      font-weight: bold;
-    }
-
-    #retry[hidden],
-    #status[hidden] {
-      display: none;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NexoApp Group Call</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        #root { width: 100vw; height: 100vh; }
+    </style>
 </head>
-
 <body>
-  <div id="root"></div>
+    <div id="root"></div>
 
-  <section id="status" role="status" aria-live="polite">
-    <div id="status-card">
-      <h1>NexoApp Group Call</h1>
-      <p id="status-message">Preparing your group call...</p>
-      <button id="retry" type="button" hidden>Try Again</button>
-    </div>
-  </section>
+    <script src="https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-uikit-prebuilt.js"></script>
+    <script>
+        const appID = 233961104;
+        const serverSecret = "8475a53e8eded3d1daaac9fe7baa7222";
 
-  <script src="https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-uikit-prebuilt.js"></script>
+        // Auto generate roomID
+        const roomID = "group_" + Math.floor(Math.random() * 1000000);
+        const userID = Math.floor(Math.random() * 10000) + "";
+        const userName = "User_" + userID;
 
-  <script>
-    (() => {
-      "use strict";
+        // Check media type from URL (voice or video)
+        const urlParams = new URLSearchParams(window.location.search);
+        const media = urlParams.get('media') || "voice";
 
-      // Your NexoApp ZEGOCLOUD App ID.
-      const APP_ID = 233961104;
+        const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
+            appID,
+            serverSecret,
+            roomID,
+            userID,
+            userName
+        );
 
-      // Replace with your deployed HTTPS backend endpoint.
-      // The backend must authenticate users and securely generate Kit Tokens.
-      const TOKEN_ENDPOINT = "";
-
-      const root = document.getElementById("root");
-      const statusPanel = document.getElementById("status");
-      const statusMessage = document.getElementById("status-message");
-      const retryButton = document.getElementById("retry");
-
-      const params = new URLSearchParams(window.location.search);
-
-      const roomID = (params.get("roomID") || "").trim();
-      const userID = (params.get("userID") || "").trim();
-      const userName = (params.get("userName") || "NexoApp User").trim();
-      const media = (params.get("media") || "video").toLowerCase();
-
-      let joining = false;
-      let callJoined = false;
-
-      function showStatus(message, canRetry = false) {
-        statusMessage.textContent = message;
-        statusPanel.hidden = false;
-        retryButton.hidden = !canRetry;
-      }
-
-      function hideStatus() {
-        statusPanel.hidden = true;
-      }
-
-      function validateCall() {
-        if (!roomID || !userID) {
-          showStatus(
-            "A room ID and unique user ID are required. Open this page with a valid NexoApp call link."
-          );
-          return false;
-        }
-
-        if (!["voice", "video"].includes(media)) {
-          showStatus("Invalid call type. Choose voice or video.");
-          return false;
-        }
-
-        if (roomID.length > 128 || userID.length > 128) {
-          showStatus("The room ID or user ID is too long.");
-          return false;
-        }
-
-        if (userName.length > 64) {
-          showStatus("Your display name is too long.");
-          return false;
-        }
-
-        return true;
-      }
-
-      async function requestKitToken() {
-        if (!TOKEN_ENDPOINT) {
-          throw new Error(
-            "The secure token service is not configured. Connect the NexoApp token backend before starting calls."
-          );
-        }
-
-        const response = await fetch(TOKEN_ENDPOINT, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            roomID: roomID,
-            userID: userID,
-            userName: userName
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(
-            "Could not obtain a call token. Please try again."
-          );
-        }
-
-        const result = await response.json();
-
-        if (
-          !result ||
-          typeof result.kitToken !== "string" ||
-          result.kitToken.length === 0
-        ) {
-          throw new Error(
-            "The token service returned an invalid token."
-          );
-        }
-
-        return result.kitToken;
-      }
-
-      function createInviteLink() {
-        const invite = new URL(window.location.href);
-
-        invite.searchParams.set("roomID", roomID);
-        invite.searchParams.set("media", media);
-
-        // Every participant should use their own authenticated identity.
-        invite.searchParams.delete("userID");
-        invite.searchParams.delete("userName");
-
-        return invite.toString();
-      }
-
-      async function joinGroupCall() {
-        if (joining || callJoined) return;
-
-        joining = true;
-        retryButton.disabled = true;
-        showStatus("Connecting to NexoApp Group Call...");
-
-        try {
-          if (!validateCall()) return;
-
-          if (!window.ZegoUIKitPrebuilt) {
-            throw new Error(
-              "The ZEGOCLOUD library could not load. Check your internet connection and reload the page."
-            );
-          }
-
-          const kitToken = await requestKitToken();
-
-          const zp = ZegoUIKitPrebuilt.create(kitToken);
-
-          zp.joinRoom({
-            container: root,
-
-            // This page is always in group-call mode.
+        const zp = ZegoUIKitPrebuilt.create(kitToken);
+        zp.joinRoom({
+            container: document.querySelector("#root"),
+            sharedLinks: [{
+                name: 'Join Group Call',
+                url: window.location.protocol + '//' + window.location.host + window.location.pathname + 
+                     '?roomID=' + roomID + '&media=' + media,
+            }],
             scenario: {
-              mode: ZegoUIKitPrebuilt.GroupCall
+                mode: ZegoUIKitPrebuilt.GroupCall,
             },
-
             turnOnCameraWhenJoining: media === "video",
             turnOnMicrophoneWhenJoining: true,
-
             showMyCameraToggleButton: true,
             showMyMicrophoneToggleButton: true,
             showAudioVideoSettingsButton: true,
-            showScreenSharingButton: false,
-
+            showScreenSharingButton: true,
             showTextChat: true,
             showUserList: true,
-
-            sharedLinks: [
-              {
-                name: "Join NexoApp Group Call",
-                url: createInviteLink()
-              }
-            ],
-
-            onJoinRoom: () => {
-              callJoined = true;
-              hideStatus();
-            },
-
-            onLeaveRoom: () => {
-              callJoined = false;
-              showStatus("You have left the group call.", true);
-            }
-          });
-        } catch (error) {
-          console.error("NexoApp Group Call:", error);
-
-          showStatus(
-            error && error.message
-              ? error.message
-              : "Unable to start the call. Please try again.",
-            true
-          );
-        } finally {
-          joining = false;
-          retryButton.disabled = false;
-        }
-      }
-
-      retryButton.addEventListener("click", joinGroupCall);
-
-      if (validateCall()) {
-        showStatus("Ready to connect. Starting your call...");
-        joinGroupCall();
-      }
-    })();
-  </script>
+            showPreJoinView: false,
+        });
+    </script>
 </body>
 </html>
