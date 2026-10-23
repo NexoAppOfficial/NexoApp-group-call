@@ -1,104 +1,58 @@
+<!DOCTYPE html>  <html>  
+<head>  
+    <meta charset="UTF-8">  
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">  
+    <title>NexoApp Group Call</title>  
+    <style>  
+        * { margin: 0; padding: 0; box-sizing: border-box; }  
+        #root { width: 100vw; height: 100vh; }  
+    </style>  
+</head>  
+<body>  
+    <div id="root"></div>  <script src="https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-uikit-prebuilt.js"></script>  
+<script>  
+    const appID = 233961104;  
+    const serverSecret = "8475a53e8eded3d1daaac9fe7baa7222";  
 
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NexoApp Group Call</title>
+    // Auto generate roomID  
+    const roomID = "group_" + Math.floor(Math.random() * 1000000);  
+    const userID = Math.floor(Math.random() * 10000) + "";  
+    const userName = "User_" + userID;  
 
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+    // Check media type from URL (voice or video)  
+    const urlParams = new URLSearchParams(window.location.search);  
+    const media = urlParams.get('media') || "voice";  
 
-        html, body, #root {
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-        }
+    const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(  
+        appID,  
+        serverSecret,  
+        roomID,  
+        userID,  
+        userName  
+    );  
 
-        #root {
-            height: 100dvh;
-        }
-    </style>
-</head>
-<body>
-    <div id="root"></div>
+    const zp = ZegoUIKitPrebuilt.create(kitToken);  
+    zp.joinRoom({  
+        container: document.querySelector("#root"),  
+        sharedLinks: [{  
+            name: 'Join Group Call',  
+            url: window.location.protocol + '//' + window.location.host + window.location.pathname +   
+                 '?roomID=' + roomID + '&media=' + media,  
+        }],  
+        scenario: {  
+            mode: ZegoUIKitPrebuilt.GroupCall,  
+        },  
+        turnOnCameraWhenJoining: media === "video",  
+        turnOnMicrophoneWhenJoining: true,  
+        showMyCameraToggleButton: true,  
+        showMyMicrophoneToggleButton: true,  
+        showAudioVideoSettingsButton: true,  
+        showScreenSharingButton: true,  
+        showTextChat: true,  
+        showUserList: true,  
+        showPreJoinView: false,  
+    });  
+</script>
 
-    <script src="https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-uikit-prebuilt.js"></script>
-
-    <script>
-        // ZEGOCLOUD test credentials
-        const appID = 233961104;
-        const serverSecret = "8475a53e8eded3d1daaac9fe7baa7222";
-
-        // Read room details from the shared link
-        const urlParams = new URLSearchParams(window.location.search);
-
-        let roomID = urlParams.get("roomID");
-        const media = urlParams.get("media") || "voice";
-
-        // Generate a room ID only when one isn't supplied
-        if (!roomID) {
-            roomID = "group_" + crypto.randomUUID().replace(/-/g, "");
-        }
-
-        // Generate a temporary test user ID
-        const userID = "user_" + crypto.randomUUID().replace(/-/g, "");
-        const userName = "NexoUser_" + userID.slice(-6);
-
-        // Ensure the SDK loaded
-        if (typeof ZegoUIKitPrebuilt === "undefined") {
-            document.getElementById("root").innerText =
-                "Unable to load the ZEGOCLOUD SDK. Please check your internet connection and reload.";
-            throw new Error("ZEGOCLOUD UIKit failed to load.");
-        }
-
-        // Generate the test token
-        const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
-            appID,
-            serverSecret,
-            roomID,
-            userID,
-            userName
-        );
-
-        // Create the call instance
-        const zp = ZegoUIKitPrebuilt.create(kitToken);
-
-        // Build a reusable invitation link
-        const joinURL = new URL(window.location.href);
-        joinURL.searchParams.set("roomID", roomID);
-        joinURL.searchParams.set("media", media);
-
-        // Join the group call
-        zp.joinRoom({
-            container: document.querySelector("#root"),
-
-            sharedLinks: [
-                {
-                    name: "Join NexoApp Group Call",
-                    url: joinURL.toString()
-                }
-            ],
-
-            scenario: {
-                mode: ZegoUIKitPrebuilt.GroupCall
-            },
-
-            turnOnCameraWhenJoining: media === "video",
-            turnOnMicrophoneWhenJoining: true,
-
-            showMyCameraToggleButton: true,
-            showMyMicrophoneToggleButton: true,
-            showAudioVideoSettingsButton: true,
-            showScreenSharingButton: true,
-            showTextChat: true,
-            showUserList: true,
-            showPreJoinView: false
-        });
-    </script>
-</body>
+</body>  
 </html>
