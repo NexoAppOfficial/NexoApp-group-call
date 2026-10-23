@@ -2,160 +2,655 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-    <title>NexoApp Group Call</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NexoApp Group Call</title>
 
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        html, body, #root {
-            width: 100%;
-            height: 100%;
-        }
-
-        body {
-            background: #ffffff;
-            font-family: Arial, sans-serif;
-        }
-
-        #root {
-            height: 100vh;
-            height: 100dvh;
-            overflow: hidden;
-        }
-
-        #loading, #error {
-            padding: 24px;
-            font-size: 16px;
-            overflow-wrap: anywhere;
-        }
-
-        #error {
-            color: #b00020;
-        }
-    </style>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f4f6fb;
+      color: #172033;
+    }
+    button, input, select { font: inherit; }
+    button {
+      border: 0;
+      border-radius: 9px;
+      padding: 13px 16px;
+      background: #164bdb;
+      color: white;
+      cursor: pointer;
+    }
+    button:disabled { opacity: .55; }
+    .danger { background: #c62828; }
+    .secondary { background: #475569; }
+    .page {
+      max-width: 520px;
+      margin: auto;
+      padding: 20px;
+    }
+    .panel {
+      background: white;
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 3px 16px #0000000d;
+      margin-bottom: 16px;
+    }
+    h1 { color: #164bdb; font-size: 25px; }
+    h2 { font-size: 19px; }
+    label { display: block; margin: 12px 0 6px; }
+    input, select {
+      width: 100%;
+      padding: 13px;
+      border: 1px solid #ccd3df;
+      border-radius: 8px;
+      background: white;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .actions button { flex: 1; }
+    #message {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-size: 14px;
+      margin: 12px 0;
+    }
+    #callContainer {
+      width: 100%;
+      height: 75dvh;
+      min-height: 420px;
+      background: #111827;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .muted { color: #64748b; font-size: 13px; }
+    .hidden { display: none !important; }
+    .incoming {
+      border: 1px solid #b9c9f9;
+      border-radius: 10px;
+      padding: 14px;
+      margin-top: 12px;
+    }
+  </style>
 </head>
 
 <body>
-    <div id="root">
-        <div id="loading">Loading NexoApp Group Call...</div>
-    </div>
+  <main class="page">
+    <h1>NexoApp Group Call</h1>
+    <p class="muted">Voice and video calls</p>
+    <div id="message" role="status">Loading services...</div>
 
-    <script>
-        const appID = 233961104;
-        const serverSecret = "8475a53e8eded3d1daaac9fe7baa7222";
+    <section id="loginPanel" class="panel">
+      <h2>Sign in to NexoApp Calls</h2>
+      <p class="muted">
+        Use your existing Supabase Auth email and password.
+        This webpage has its own login session.
+      </p>
 
-        const root = document.getElementById("root");
-        const params = new URLSearchParams(window.location.search);
+      <form id="loginForm">
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="username" required>
 
-        // Use an existing room ID from a shared invitation.
-        let roomID = params.get("roomID");
+        <label for="password">Password</label>
+        <input id="password" type="password"
+               autocomplete="current-password" required>
 
-        // Generate a new room if no room ID was supplied.
-        if (!roomID) {
-            roomID = "group_" +
-                Math.random().toString(36).slice(2, 12);
+        <div class="actions">
+          <button type="submit">Sign in</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="dashboard" class="panel hidden">
+      <h2>Make a call</h2>
+      <p id="signedInAs" class="muted"></p>
+
+      <label for="receiverID">Receiver's Supabase user UUID</label>
+      <input id="receiverID" placeholder="Paste receiver's user UUID">
+
+      <label for="callType">Call type</label>
+      <select id="callType">
+        <option value="voice">Voice call</option>
+        <option value="video">Video call</option>
+      </select>
+
+      <div class="actions">
+        <button id="callButton">Start call</button>
+        <button id="logoutButton" class="secondary">Sign out</button>
+      </div>
+
+      <h2>Incoming calls</h2>
+      <div id="incomingCalls">
+        <p class="muted">Waiting for incoming calls...</p>
+      </div>
+    </section>
+
+    <section id="activePanel" class="panel hidden">
+      <h2 id="activeTitle">Call in progress</h2>
+      <p id="activeInfo" class="muted"></p>
+      <div id="callContainer"></div>
+      <div class="actions">
+        <button id="endButton" class="danger">End call</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Supabase JavaScript client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- ZEGOCLOUD UIKit Prebuilt -->
+  <script src="https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-uikit-prebuilt.js"></script>
+
+  <script>
+    // SUPABASE CONFIGURATION
+    const SUPABASE_URL =
+      "https://usdkrqvgfqlxbrzgjrnb.supabase.co";
+
+    const SUPABASE_KEY =
+      "sb_publishable_UCX7yXRcFiDrcmfHAxFejA_6jTtcHwb";
+
+    // TEMPORARY ZEGOCLOUD TEST CONFIGURATION
+    const appID = 233961104;
+    const serverSecret = "8475a53e8eded3d1daaac9fe7baa7222";
+
+    const db = window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_KEY
+    );
+
+    const $ = id => document.getElementById(id);
+
+    let currentUser = null;
+    let incomingChannel = null;
+    let callerChannel = null;
+    let activeCall = null;
+    let zegoInstance = null;
+    let presenceChannel = null;
+    const seenCalls = new Set();
+
+    function showMessage(message) {
+      $("message").textContent = message;
+    }
+
+    function showPanel(id, visible) {
+      $(id).classList.toggle("hidden", !visible);
+    }
+
+    function safeZegoID(value) {
+      return String(value).replace(/[^a-zA-Z0-9_]/g, "_");
+    }
+
+    function newID() {
+      return crypto.randomUUID();
+    }
+
+    function getCallURL(call) {
+      const url = new URL(window.location.href);
+      url.search = "";
+      url.searchParams.set("callId", call.id);
+      return url.toString();
+    }
+
+    async function updateCall(callID, values) {
+      const { error } = await db
+        .from("calls")
+        .update(values)
+        .eq("id", callID);
+
+      if (error) throw error;
+    }
+
+    function stopRealtime() {
+      if (incomingChannel) {
+        db.removeChannel(incomingChannel);
+        incomingChannel = null;
+      }
+
+      if (callerChannel) {
+        db.removeChannel(callerChannel);
+        callerChannel = null;
+      }
+
+      if (presenceChannel) {
+        db.removeChannel(presenceChannel);
+        presenceChannel = null;
+      }
+    }
+
+    async function setOnline(isOnline) {
+      if (!currentUser) return;
+
+      const now = new Date().toISOString();
+
+      const { error } = await db
+        .from("user_status")
+        .upsert({
+          user_id: currentUser.id,
+          is_online: isOnline,
+          last_seen: now
+        }, {
+          onConflict: "user_id"
+        });
+
+      if (error) {
+        console.warn("Could not update online status:", error.message);
+      }
+    }
+
+    function makeIncomingCard(call) {
+      if (seenCalls.has(call.id)) return;
+      seenCalls.add(call.id);
+
+      const container = $("incomingCalls");
+
+      if (container.querySelector(".muted")) {
+        container.innerHTML = "";
+      }
+
+      const card = document.createElement("div");
+      card.className = "incoming";
+
+      const title = document.createElement("strong");
+      title.textContent =
+        (call.call_type === "video" ? "Incoming video call" :
+        "Incoming voice call");
+
+      const details = document.createElement("p");
+      details.textContent = "Caller ID: " + call.caller_id;
+
+      const actions = document.createElement("div");
+      actions.className = "actions";
+
+      const answer = document.createElement("button");
+      answer.textContent = "Answer";
+
+      const reject = document.createElement("button");
+      reject.textContent = "Reject";
+      reject.className = "danger";
+
+      answer.onclick = async () => {
+        answer.disabled = true;
+        try {
+          const { data, error } = await db
+            .from("calls")
+            .update({
+              status: "answered",
+              answered_at: new Date().toISOString()
+            })
+            .eq("id", call.id)
+            .eq("receiver_id", currentUser.id)
+            .eq("status", "ringing")
+            .select()
+            .single();
+
+          if (error) throw error;
+          if (!data) throw new Error("Call is no longer available.");
+
+          card.remove();
+          await enterCall(data);
+        } catch (error) {
+          answer.disabled = false;
+          showMessage("Could not answer: " + error.message);
         }
+      };
 
-        // Use only letters, numbers and underscores in generated IDs.
-        const userID = "user_" +
-            Math.random().toString(36).slice(2, 12);
-
-        const userName = "NexoUser_" + userID.slice(-6);
-
-        const media = params.get("media") === "video"
-            ? "video"
-            : "voice";
-
-        function showError(message) {
-            root.innerHTML = "";
-
-            const errorBox = document.createElement("div");
-            errorBox.id = "error";
-            errorBox.textContent = message;
-
-            root.appendChild(errorBox);
+      reject.onclick = async () => {
+        reject.disabled = true;
+        try {
+          await updateCall(call.id, {
+            status: "rejected",
+            ended_at: new Date().toISOString()
+          });
+          card.remove();
+          showMessage("Call rejected.");
+        } catch (error) {
+          reject.disabled = false;
+          showMessage("Could not reject: " + error.message);
         }
+      };
 
-        function startCall() {
-            try {
-                if (!window.ZegoUIKitPrebuilt) {
-                    throw new Error("ZEGOCLOUD SDK did not load.");
-                }
+      actions.append(answer, reject);
+      card.append(title, details, actions);
+      container.prepend(card);
+    }
 
-                const kitToken =
-                    ZegoUIKitPrebuilt.generateKitTokenForTest(
-                        appID,
-                        serverSecret,
-                        roomID,
-                        userID,
-                        userName
-                    );
+    async function loadPendingCalls() {
+      const { data, error } = await db
+        .from("calls")
+        .select("*")
+        .eq("receiver_id", currentUser.id)
+        .eq("status", "ringing");
 
-                const zp = ZegoUIKitPrebuilt.create(kitToken);
+      if (error) {
+        showMessage("Could not load incoming calls: " + error.message);
+        return;
+      }
 
-                // Share the same room ID with other participants.
-                const inviteURL = new URL(window.location.href);
-                inviteURL.searchParams.set("roomID", roomID);
-                inviteURL.searchParams.set("media", media);
+      (data || []).forEach(makeIncomingCard);
+    }
 
-                zp.joinRoom({
-                    container: root,
+    function subscribeToCalls() {
+      stopRealtime();
 
-                    sharedLinks: [
-                        {
-                            name: "Join NexoApp Group Call",
-                            url: inviteURL.toString()
-                        }
-                    ],
+      incomingChannel = db
+        .channel("incoming-calls-" + currentUser.id)
+        .on("postgres_changes", {
+          event: "INSERT",
+          schema: "public",
+          table: "calls",
+          filter: "receiver_id=eq." + currentUser.id
+        }, payload => {
+          if (payload.new.status === "ringing") {
+            makeIncomingCard(payload.new);
+            showMessage("Incoming call received.");
+          }
+        })
+        .subscribe(status => {
+          console.log("Incoming call listener:", status);
+        });
 
-                    scenario: {
-                        mode: ZegoUIKitPrebuilt.GroupCall
-                    },
+      callerChannel = db
+        .channel("outgoing-call-updates-" + currentUser.id)
+        .on("postgres_changes", {
+          event: "UPDATE",
+          schema: "public",
+          table: "calls",
+          filter: "caller_id=eq." + currentUser.id
+        }, payload => {
+          const call = payload.new;
 
-                    turnOnCameraWhenJoining: media === "video",
-                    turnOnMicrophoneWhenJoining: true,
-
-                    showMyCameraToggleButton: true,
-                    showMyMicrophoneToggleButton: true,
-                    showAudioVideoSettingsButton: true,
-                    showScreenSharingButton: true,
-                    showTextChat: true,
-                    showUserList: true,
-                    showPreJoinView: false
-                });
-
-            } catch (error) {
-                console.error("NexoApp call error:", error);
-                showError(
-                    "Unable to start the call: " +
-                    (error.message || "Unknown error") +
-                    ". Check the ZEGOCLOUD configuration and reload."
-                );
+          if (activeCall && activeCall.id === call.id) {
+            if (call.status === "answered") {
+              showMessage("Receiver answered the call.");
+            } else if (call.status === "rejected") {
+              showMessage("Receiver rejected the call.");
+            } else if (call.status === "ended") {
+              showMessage("Call ended.");
             }
-        }
+          }
+        })
+        .subscribe(status => {
+          console.log("Call status listener:", status);
+        });
+    }
 
-        // Load the ZEGOCLOUD UIKit SDK.
-        const script = document.createElement("script");
+    async function enterCall(call) {
+      if (!window.ZegoUIKitPrebuilt) {
+        throw new Error("ZEGOCLOUD SDK has not loaded.");
+      }
 
-        script.src =
-            "https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-uikit-prebuilt.js";
+      if (zegoInstance) {
+        throw new Error("A call is already active.");
+      }
 
-        script.onload = startCall;
+      activeCall = call;
 
-        script.onerror = function () {
-            showError(
-                "ZEGOCLOUD SDK could not load. Check your internet connection and try again."
-            );
+      showPanel("dashboard", false);
+      showPanel("activePanel", true);
+
+      $("activeTitle").textContent =
+        call.call_type === "video" ? "Video call" : "Voice call";
+
+      $("activeInfo").textContent = "Room: " + call.room_id;
+
+      const userID = safeZegoID(currentUser.id);
+      const userName =
+        currentUser.user_metadata?.full_name ||
+        currentUser.email ||
+        "NexoUser";
+
+      const token = ZegoUIKitPrebuilt.generateKitTokenForTest(
+        appID,
+        serverSecret,
+        call.room_id,
+        userID,
+        userName
+      );
+
+      zegoInstance = ZegoUIKitPrebuilt.create(token);
+
+      const sharedURL = getCallURL(call);
+
+      zegoInstance.joinRoom({
+        container: $("callContainer"),
+
+        sharedLinks: [{
+          name: "Join NexoApp Call",
+          url: sharedURL
+        }],
+
+        scenario: {
+          mode: ZegoUIKitPrebuilt.GroupCall
+        },
+
+        turnOnCameraWhenJoining: call.call_type === "video",
+        turnOnMicrophoneWhenJoining: true,
+
+        showMyCameraToggleButton: true,
+        showMyMicrophoneToggleButton: true,
+        showAudioVideoSettingsButton: true,
+        showScreenSharingButton: true,
+        showTextChat: true,
+        showUserList: true,
+        showPreJoinView: false
+      });
+
+      showMessage("Joined call room.");
+    }
+
+    async function startOutgoingCall() {
+      if (!currentUser) return;
+
+      const receiverID = $("receiverID").value.trim();
+      const callType = $("callType").value;
+
+      if (!receiverID) {
+        showMessage("Enter the receiver's Supabase user UUID.");
+        return;
+      }
+
+      if (receiverID === currentUser.id) {
+        showMessage("You cannot call your own account.");
+        return;
+      }
+
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(receiverID)) {
+        showMessage("The receiver ID must be a valid Supabase UUID.");
+        return;
+      }
+
+      $("callButton").disabled = true;
+
+      try {
+        const call = {
+          id: newID(),
+          caller_id: currentUser.id,
+          receiver_id: receiverID,
+          call_type: callType,
+          status: "ringing",
+          started_at: new Date().toISOString(),
+          answered_at: null,
+          ended_at: null,
+          created_at: new Date().toISOString(),
+          room_id: "nexo_" + newID().replace(/-/g, "")
         };
 
-        document.head.appendChild(script);
-    </script>
+        const { data, error } = await db
+          .from("calls")
+          .insert(call)
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        showMessage("Call created. Waiting for receiver...");
+        await enterCall(data);
+
+      } catch (error) {
+        console.error(error);
+        showMessage(
+          "Could not start call: " + error.message +
+          "\nCheck your calls table columns and RLS policies."
+        );
+      } finally {
+        $("callButton").disabled = false;
+      }
+    }
+
+    async function endCall() {
+      if (!activeCall) return;
+
+      const call = activeCall;
+
+      try {
+        await updateCall(call.id, {
+          status: "ended",
+          ended_at: new Date().toISOString()
+        });
+      } catch (error) {
+        showMessage("Could not update call status: " + error.message);
+      }
+
+      try {
+        if (zegoInstance && typeof zegoInstance.destroy === "function") {
+          zegoInstance.destroy();
+        }
+      } catch (error) {
+        console.warn("ZEGOCLOUD cleanup:", error);
+      }
+
+      zegoInstance = null;
+      activeCall = null;
+      $("callContainer").innerHTML = "";
+
+      showPanel("activePanel", false);
+      showPanel("dashboard", true);
+      showMessage("Call ended.");
+    }
+
+    async function openDashboard(user) {
+      currentUser = user;
+
+      showPanel("loginPanel", false);
+      showPanel("dashboard", true);
+
+      $("signedInAs").textContent =
+        "Signed in: " + (user.email || user.id);
+
+      $("incomingCalls").innerHTML =
+        '<p class="muted">Checking incoming calls...</p>';
+
+      await setOnline(true);
+      subscribeToCalls();
+      await loadPendingCalls();
+
+      // If opened from an invitation, look up that call.
+      const inviteCallID =
+        new URLSearchParams(location.search).get("callId");
+
+      if (inviteCallID) {
+        const { data, error } = await db
+          .from("calls")
+          .select("*")
+          .eq("id", inviteCallID)
+          .eq("receiver_id", user.id)
+          .eq("status", "ringing")
+          .maybeSingle();
+
+        if (error) {
+          showMessage("Could not load invitation: " + error.message);
+        } else if (data) {
+          makeIncomingCard(data);
+        }
+      }
+
+      showMessage("Signed in. Ready for calls.");
+    }
+
+    $("loginForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      showMessage("Signing in...");
+
+      const { data, error } = await db.auth.signInWithPassword({
+        email: $("email").value.trim(),
+        password: $("password").value
+      });
+
+      if (error) {
+        showMessage("Sign-in failed: " + error.message);
+        return;
+      }
+
+      await openDashboard(data.user);
+    });
+
+    $("callButton").addEventListener("click", startOutgoingCall);
+    $("endButton").addEventListener("click", endCall);
+
+    $("logoutButton").addEventListener("click", async () => {
+      if (activeCall) {
+        await endCall();
+      }
+
+      await setOnline(false);
+      stopRealtime();
+
+      const { error } = await db.auth.signOut();
+
+      if (error) {
+        showMessage("Sign-out failed: " + error.message);
+        return;
+      }
+
+      currentUser = null;
+      $("incomingCalls").innerHTML = "";
+      showPanel("dashboard", false);
+      showPanel("loginPanel", true);
+      showMessage("Signed out.");
+    });
+
+    async function initialize() {
+      if (!window.supabase || !window.ZegoUIKitPrebuilt) {
+        showMessage(
+          "A required service failed to load. Check your internet connection and reload."
+        );
+        return;
+      }
+
+      const { data, error } = await db.auth.getSession();
+
+      if (error) {
+        showMessage("Could not check session: " + error.message);
+        return;
+      }
+
+      if (data.session) {
+        await openDashboard(data.session.user);
+      } else {
+        showPanel("loginPanel", true);
+        showMessage("Sign in to make and receive calls.");
+      }
+    }
+
+    initialize();
+
+    // Mark offline when the page is being closed.
+    window.addEventListener("pagehide", () => {
+      if (currentUser) {
+        db.from("user_status")
+          .update({
+            is_online: false,
+            last_seen: new Date().toISOString()
+          })
+          .eq("user_id", currentUser.id);
+      }
+    });
+  </script>
 </body>
 </html>
