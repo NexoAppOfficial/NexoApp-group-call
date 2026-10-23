@@ -1,58 +1,161 @@
-<!DOCTYPE html>  <html>  
-<head>  
-    <meta charset="UTF-8">  
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">  
-    <title>NexoApp Group Call</title>  
-    <style>  
-        * { margin: 0; padding: 0; box-sizing: border-box; }  
-        #root { width: 100vw; height: 100vh; }  
-    </style>  
-</head>  
-<body>  
-    <div id="root"></div>  <script src="https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-uikit-prebuilt.js"></script>  
-<script>  
-    const appID = 233961104;  
-    const serverSecret = "8475a53e8eded3d1daaac9fe7baa7222";  
 
-    // Auto generate roomID  
-    const roomID = "group_" + Math.floor(Math.random() * 1000000);  
-    const userID = Math.floor(Math.random() * 10000) + "";  
-    const userName = "User_" + userID;  
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>NexoApp Group Call</title>
 
-    // Check media type from URL (voice or video)  
-    const urlParams = new URLSearchParams(window.location.search);  
-    const media = urlParams.get('media') || "voice";  
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-    const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(  
-        appID,  
-        serverSecret,  
-        roomID,  
-        userID,  
-        userName  
-    );  
+        html, body, #root {
+            width: 100%;
+            height: 100%;
+        }
 
-    const zp = ZegoUIKitPrebuilt.create(kitToken);  
-    zp.joinRoom({  
-        container: document.querySelector("#root"),  
-        sharedLinks: [{  
-            name: 'Join Group Call',  
-            url: window.location.protocol + '//' + window.location.host + window.location.pathname +   
-                 '?roomID=' + roomID + '&media=' + media,  
-        }],  
-        scenario: {  
-            mode: ZegoUIKitPrebuilt.GroupCall,  
-        },  
-        turnOnCameraWhenJoining: media === "video",  
-        turnOnMicrophoneWhenJoining: true,  
-        showMyCameraToggleButton: true,  
-        showMyMicrophoneToggleButton: true,  
-        showAudioVideoSettingsButton: true,  
-        showScreenSharingButton: true,  
-        showTextChat: true,  
-        showUserList: true,  
-        showPreJoinView: false,  
-    });  
-</script>
+        body {
+            background: #ffffff;
+            font-family: Arial, sans-serif;
+        }
 
-</body>  
+        #root {
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+        }
+
+        #loading, #error {
+            padding: 24px;
+            font-size: 16px;
+            overflow-wrap: anywhere;
+        }
+
+        #error {
+            color: #b00020;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root">
+        <div id="loading">Loading NexoApp Group Call...</div>
+    </div>
+
+    <script>
+        const appID = 233961104;
+        const serverSecret = "8475a53e8eded3d1daaac9fe7baa7222";
+
+        const root = document.getElementById("root");
+        const params = new URLSearchParams(window.location.search);
+
+        // Use an existing room ID from a shared invitation.
+        let roomID = params.get("roomID");
+
+        // Generate a new room if no room ID was supplied.
+        if (!roomID) {
+            roomID = "group_" +
+                Math.random().toString(36).slice(2, 12);
+        }
+
+        // Use only letters, numbers and underscores in generated IDs.
+        const userID = "user_" +
+            Math.random().toString(36).slice(2, 12);
+
+        const userName = "NexoUser_" + userID.slice(-6);
+
+        const media = params.get("media") === "video"
+            ? "video"
+            : "voice";
+
+        function showError(message) {
+            root.innerHTML = "";
+
+            const errorBox = document.createElement("div");
+            errorBox.id = "error";
+            errorBox.textContent = message;
+
+            root.appendChild(errorBox);
+        }
+
+        function startCall() {
+            try {
+                if (!window.ZegoUIKitPrebuilt) {
+                    throw new Error("ZEGOCLOUD SDK did not load.");
+                }
+
+                const kitToken =
+                    ZegoUIKitPrebuilt.generateKitTokenForTest(
+                        appID,
+                        serverSecret,
+                        roomID,
+                        userID,
+                        userName
+                    );
+
+                const zp = ZegoUIKitPrebuilt.create(kitToken);
+
+                // Share the same room ID with other participants.
+                const inviteURL = new URL(window.location.href);
+                inviteURL.searchParams.set("roomID", roomID);
+                inviteURL.searchParams.set("media", media);
+
+                zp.joinRoom({
+                    container: root,
+
+                    sharedLinks: [
+                        {
+                            name: "Join NexoApp Group Call",
+                            url: inviteURL.toString()
+                        }
+                    ],
+
+                    scenario: {
+                        mode: ZegoUIKitPrebuilt.GroupCall
+                    },
+
+                    turnOnCameraWhenJoining: media === "video",
+                    turnOnMicrophoneWhenJoining: true,
+
+                    showMyCameraToggleButton: true,
+                    showMyMicrophoneToggleButton: true,
+                    showAudioVideoSettingsButton: true,
+                    showScreenSharingButton: true,
+                    showTextChat: true,
+                    showUserList: true,
+                    showPreJoinView: false
+                });
+
+            } catch (error) {
+                console.error("NexoApp call error:", error);
+                showError(
+                    "Unable to start the call: " +
+                    (error.message || "Unknown error") +
+                    ". Check the ZEGOCLOUD configuration and reload."
+                );
+            }
+        }
+
+        // Load the ZEGOCLOUD UIKit SDK.
+        const script = document.createElement("script");
+
+        script.src =
+            "https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-uikit-prebuilt.js";
+
+        script.onload = startCall;
+
+        script.onerror = function () {
+            showError(
+                "ZEGOCLOUD SDK could not load. Check your internet connection and try again."
+            );
+        };
+
+        document.head.appendChild(script);
+    </script>
+</body>
 </html>
